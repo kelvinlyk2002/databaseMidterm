@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <%- include('../partials/head'); %>
+</head>
+    <header>
+        <%- include('../partials/header'); %>
+    </header>
+    <body>
+        <div class="jumbotron">
+            <h1 class="display-4">Confirm delete - <%= device.name %></h1>
+            <p class="lead">Sure to delete this device?</p>
+            <div id="buttonSection">
+                <button class="btn btn-danger" id="form_confirm">Confirm</button>
+                <button class="btn btn-outline-danger" href="/status">Cancel</button>    
+            </div>
+        </div>
+        <div class="container">
+            <div class="alert alert-success" role="alert" id="successBanner">
+                Successfully deleted this device from mySmartHome.
+                <a href="/status">View other devices</a>.
+            </div>
+        </div>
+    </body>
+        <%- include('../partials/foot'); %>
+        <script>
+            $(document).ready(function(){
+                $("#successBanner").hide();
+                $("#form_confirm").click(function(){
+                    event.preventDefault();
+                    $.ajax({
+                        method: "POST",
+                        url: "/delete-device",
+                        data: {"id": <%= device.id %>}
+                    })
+                        .done(function(){
+                            $("#successBanner").show();
+                            $("#buttonSection").hide();
+                        });
+                });
+            });
+        </script>
+</html>
