@@ -1,88 +1,65 @@
 <script src="/js/jquery-3.6.0.min.js"></script>
 <script src="/js/bootstrap.bundle.min.js"></script>
+<script src="/js/d3.v6.js"></script>
+<!-- <script src="/js/leaflet.js"></script> -->
+<!-- Make sure you put this AFTER Leaflet's CSS -->
+<!-- <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"
+  integrity="sha512-BB3hKbKWOc9Ez/TAwyWxNXeoV9c1v6FIeYiBieIWkpLjauysF18NzgR1MBNBXf8/KABdlkX68nAhlwcDFLGPCQ=="
+  crossorigin=""></script> -->
 <script>
-    function updateAvailableFields(selectedDeviceType, deviceTypes){
-    if(deviceTypes[selectedDeviceType]["canOnOff"]){
-        $("#form_onOff").show();
-    } else {
-        $("#form_onOff").hide();
-        $("onOff").val(-125); 
-    }
-    if(deviceTypes[selectedDeviceType]["canOpenClose"]){
-        $("#form_openClose").show();
-    } else {
-        $("#form_openClose").hide();
-        $("openClose").val(-125);
-    }
-    if(deviceTypes[selectedDeviceType]["canAdjustVol"]){
-        $("#form_adjustVol").show();
-    } else {
-        $("#form_adjustVol").hide();
-        $("volume").val(-125);
-    }
-    if(deviceTypes[selectedDeviceType]["canAdjustTemp"]){
-        $("#form_adjustTemp").show();
-    } else {
-        $("#form_adjustTemp").hide();
-        $("temperature").val(-125);
-    }
-    if(deviceTypes[selectedDeviceType]["canAdjustBrightness"]){
-        $("#form_adjustBrightness").show();
-    } else {
-        $("#form_adjustBrightness").hide();
-        $("temperature").val(-125);
-    }
-}
+  // var map = L.map('map').setView([37.8, -96], 4);
 
-function handleForm(selectedDeviceType, deviceTypes){
-    if(deviceTypes[selectedDeviceType]["canOnOff"]){
-        var onOff = $("#onOff").val();
-    } else {
-        var onOff = -125;
-    }
-    if(deviceTypes[selectedDeviceType]["canOpenClose"]){
-        var openClose = $("#openClose").val();
-    } else {
-        var openClose = -125;
-    }
-    if(deviceTypes[selectedDeviceType]["canAdjustVol"]){
-        var volume = $("#adjustVol").val();
-        if(volume == null){ volume = -125} else {
-            volume = Math.max(Math.min(volume, 100), 0);
-        };
-    } else {
-        var volume = -125;
-    }
-    if(deviceTypes[selectedDeviceType]["canAdjustTemp"]){
-        var temperature = $("#adjustTemp").val();
-        if(temperature == null){ temperature = -125} else {
-            if(selectedDeviceType == "Hob" || selectedDeviceType == "Oven"){
-                maxTemp = 400;
-            } else {
-                maxTemp = 100;
-            }
-            temperature = Math.max(Math.min(temperature, maxTemp), 0);
-        };
-    } else {
-        var temperature = -125;
-    }
-    if(deviceTypes[selectedDeviceType]["canAdjustBrightness"]){
-        var brightness = $("#adjustBrightness").val();
-        if(brightness == null){ brightness = -125} else {
-            brightness = Math.max(Math.min(brightness, 100), 0);
-        };
-    } else {
-        var brightness = -125;
-    }
-    formElements = {
-        "deviceType": deviceTypes[selectedDeviceType]["id"],
-        "onOff": onOff,
-        "openClose": openClose,
-        "volume": volume,
-        "temperature": temperature,
-        "brightness": brightness,
-        "id": null
-    }
-    return formElements;
-}
+  // L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=pk.eyJ1Ijoia2VsdmlubHlrMjAwMiIsImEiOiJjbDJ0a2Z6anMwMWE3M2JsbWNlYmQ2Y2dxIn0.jtrIK415GsLZ7S6OE6c3zw', {
+  //   id: 'mapbox/light-v9',
+  //   tileSize: 512,
+  //   zoomOffset: -1
+  // }).addTo(map);
+
+  // L.geoJson(statesData).addTo(map);
+// The svg
+        const svg = d3.select("svg"),
+        width = +svg.attr("width"),
+        height = +svg.attr("height");
+
+        // Map and projection
+        const path = d3.geoPath();
+        const projection = d3.geoMercator()
+        .scale(3000)
+        .center([-0.118092, 51.509865])
+        .translate([width / 2, height / 2]);
+
+        // Data and color scale
+        let data = new Map()
+        const colorScale = d3.scaleThreshold()
+        .domain([100000, 1000000, 10000000, 30000000, 100000000, 500000000])
+        .range(d3.schemeBlues[7]);
+
+        // Load external data and boot
+        Promise.all([
+        // d3.json("https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson"),
+        // d3.csv("https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world_population.csv", function(d) {
+        //   data.set(d.code, +d.pop)
+        // })
+        // required to enquiry geojson over http
+        d3.json("/londonGEO"),
+        d3.json("/boroughCrime", function (d) {
+          data.set(d.boroughName, +d.crimeCount)
+        })
+        ]).then(function(loadData){
+          let topo = loadData[0]
+          // Draw the map
+          svg.append("g")
+            .selectAll("path")
+            .data(topo.features)
+            .join("path")
+              // draw each country
+              .attr("d", d3.geoPath()
+                .projection(projection)
+              )
+              // set the color of each country
+              .attr("fill", function (d) {
+                    d.total = data.get(d.id) || 0;
+                return colorScale(d.total);
+              })
+        })
 </script>

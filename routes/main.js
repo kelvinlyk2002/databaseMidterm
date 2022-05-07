@@ -4,15 +4,146 @@ module.exports = function (app) {
     // input: nil
     // output: a static home page
     app.get("/", function (req, res) {
-        
         res.render("pages/index")
+    });
+
+    app.get("/london", async function (req, res) {
+        // load table for further processing
+        // const mysql = require("mysql");
+        // const db = mysql.createConnection({
+        //     host: "localhost",
+        //     user: "root",
+        //     password: "",
+        //     database: "midterm"
+        // });
+        // db.connect((err) => {
+        //     if (err) {
+        //         throw err;
+        //     }
+        //     console.log("Connected to database");
+        // });
+        // global.db = db;
+
+        let sqlquery = `
+WITH crimeCategory AS (
+    SELECT
+        minorCrimeCategory.id AS minorCrimeID,
+        minorCrimeCategory.name AS minorCrimeName,
+        majorCrimeCategory.name AS majorCrimeName
+    FROM minorCrimeCategory
+    INNER JOIN majorCrimeCategory ON minorCrimeCategory.majorCrimeID = majorCrimeCategory.id
+), boroughWard AS (
+    SELECT
+        ward.id AS wardID,
+        ward.wardCode AS wardCode,
+        borough.name AS boroughName,
+        ward.name AS wardName
+    FROM ward
+    INNER JOIN borough ON ward.boroughID = borough.id
+)
+SELECT
+    boroughWard.boroughName as boroughName,
+    boroughWard.wardName as wardName,
+    boroughWard.wardCode as wardCode,
+    crimeCategory.minorCrimeName as minorCrimeName,
+    crimeCategory.majorCrimeName as majorCrimeName,
+    crime.month as month,
+    crime.year as year,
+    crime.crimeCount as crimeCount
+FROM crime
+INNER JOIN crimeCategory ON crime.minorCrimeID = crimeCategory.minorCrimeID
+INNER JOIN boroughWard ON crime.wardID = boroughWard.wardID;
+`;
+        
+let boroughSqlquery = `
+WITH crimeCategory AS (
+    SELECT
+        minorCrimeCategory.id AS minorCrimeID,
+        minorCrimeCategory.name AS minorCrimeName,
+        majorCrimeCategory.name AS majorCrimeName
+    FROM minorCrimeCategory
+    INNER JOIN majorCrimeCategory ON minorCrimeCategory.majorCrimeID = majorCrimeCategory.id
+), boroughWard AS (
+    SELECT
+        ward.id AS wardID,
+        ward.wardCode AS wardCode,
+        borough.name AS boroughName,
+        ward.name AS wardName
+    FROM ward
+    INNER JOIN borough ON ward.boroughID = borough.id
+)
+SELECT
+    boroughWard.boroughName as boroughName,
+    crimeCategory.minorCrimeName as minorCrimeName,
+    crimeCategory.majorCrimeName as majorCrimeName,
+    crime.month as month,
+    crime.year as year,
+    SUM(crime.crimeCount) as crimeCount
+FROM crime
+INNER JOIN crimeCategory ON crime.minorCrimeID = crimeCategory.minorCrimeID
+INNER JOIN boroughWard ON crime.wardID = boroughWard.wardID
+GROUP BY boroughWard.boroughName, minorCrimeName, majorCrimeName, crime.month, crime.year;
+`;
+
+        db.query(boroughSqlquery, (err, rows) => {
+            if (err) {
+                res.sendStatus(500);
+            }
+            res.render("pages/about", { result: JSON.parse(JSON.stringify(rows))});
+        });
+    });
+
+    app.get("/londonGEO", function (req, res) {
+        const fs = require('fs');
+        let rawdata = fs.readFileSync('london.geojson');
+        let londonGEO = JSON.parse(rawdata);
+        res.json(londonGEO);
+    })
+
+    app.get("/boroughCrime", function (req, res) {
+        let boroughSqlquery = `
+WITH crimeCategory AS (
+    SELECT
+        minorCrimeCategory.id AS minorCrimeID,
+        minorCrimeCategory.name AS minorCrimeName,
+        majorCrimeCategory.name AS majorCrimeName
+    FROM minorCrimeCategory
+    INNER JOIN majorCrimeCategory ON minorCrimeCategory.majorCrimeID = majorCrimeCategory.id
+), boroughWard AS (
+    SELECT
+        ward.id AS wardID,
+        ward.wardCode AS wardCode,
+        borough.name AS boroughName,
+        ward.name AS wardName
+    FROM ward
+    INNER JOIN borough ON ward.boroughID = borough.id
+)
+SELECT
+    boroughWard.boroughName as boroughName,
+    crimeCategory.minorCrimeName as minorCrimeName,
+    crimeCategory.majorCrimeName as majorCrimeName,
+    crime.month as month,
+    crime.year as year,
+    SUM(crime.crimeCount) as crimeCount
+FROM crime
+INNER JOIN crimeCategory ON crime.minorCrimeID = crimeCategory.minorCrimeID
+INNER JOIN boroughWard ON crime.wardID = boroughWard.wardID
+GROUP BY boroughWard.boroughName, minorCrimeName, majorCrimeName, crime.month, crime.year;
+`;
+
+        db.query(boroughSqlquery, (err, rows) => {
+            if (err) {
+                res.sendStatus(500);
+            }
+            res.render("pages/about", { result: JSON.parse(JSON.stringify(rows)) });
+        });
     });
 
     // Purpose: to serve a static about page
     // input: nil
     // output: a static about page
     app.get("/about", function (req, res) {
-        res.render("pages/about")
+        res.render("pages/about", {result: []})
     });
 
     // Purpose: to serve a page where user can add new devices into the database
