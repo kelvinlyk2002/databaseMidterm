@@ -95,13 +95,13 @@ GROUP BY boroughWard.boroughName, minorCrimeName, majorCrimeName, crime.month, c
 
     app.get("/londonGEO", function (req, res) {
         const fs = require('fs');
-        let rawdata = fs.readFileSync('london.geojson');
+        let rawdata = fs.readFileSync('./helper/london.geojson');
         let londonGEO = JSON.parse(rawdata);
         res.json(londonGEO);
     })
 
     app.get("/boroughCrime", function (req, res) {
-        let boroughSqlquery = `
+        let boroughOverallSqlquery = `
 WITH crimeCategory AS (
     SELECT
         minorCrimeCategory.id AS minorCrimeID,
@@ -119,23 +119,19 @@ WITH crimeCategory AS (
     INNER JOIN borough ON ward.boroughID = borough.id
 )
 SELECT
-    boroughWard.boroughName as boroughName,
-    crimeCategory.minorCrimeName as minorCrimeName,
-    crimeCategory.majorCrimeName as majorCrimeName,
-    crime.month as month,
-    crime.year as year,
+    boroughWard.wardCode as wardCode,
     SUM(crime.crimeCount) as crimeCount
 FROM crime
 INNER JOIN crimeCategory ON crime.minorCrimeID = crimeCategory.minorCrimeID
 INNER JOIN boroughWard ON crime.wardID = boroughWard.wardID
-GROUP BY boroughWard.boroughName, minorCrimeName, majorCrimeName, crime.month, crime.year;
-`;
+GROUP BY boroughWard.wardCode;
+        `;
 
-        db.query(boroughSqlquery, (err, rows) => {
+        db.query(boroughOverallSqlquery, (err, rows) => {
             if (err) {
                 res.sendStatus(500);
             }
-            res.render("pages/about", { result: JSON.parse(JSON.stringify(rows)) });
+            res.json(JSON.parse(JSON.stringify(rows)));
         });
     });
 

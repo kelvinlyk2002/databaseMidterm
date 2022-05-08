@@ -1,12 +1,12 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const app = express();
-const mysql = require("mysql");
+const mysql = require("mysql2");
 const port = 8089;
 const db = mysql.createConnection({
-    host: "localhost",
+    host: "127.0.0.1",
     user: "root",
-    password: "",
+    password: "password",
     database: "midterm"
 });
 db.connect((err) => {
