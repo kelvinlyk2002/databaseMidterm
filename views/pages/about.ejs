@@ -1,22 +1,178 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <%- include('../partials/head'); %>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">    
+    <title>London Crime Rate by wards</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css" type="text/css">
 </head>
-<!-- <style>
-    #map { height: 180px; }
-</style> -->
     <header>
-        <!-- <%- include('../partials/header'); %> -->
     </header>
     <body>
-        <svg id="my_dataviz" width="400" height="300"></svg>
-        <!-- <%- JSON.stringify(result) %> -->
-        <!-- <div class="jumbotron">
-            <h1 class="display-4">About mySmartHome</h1>
-            <p class="lead">This is a mid-term assignment for Database and Web Applications developed by Yui Kwan Law (190318033).</p>
-          </div> -->
-        <!-- <div id="map"></div> -->
-    </body>
-        <%- include('../partials/foot'); %>
+        <div class="container">
+            <div class="row">
+                <div class="col">
+                    <div class="jumbotron">
+                        <h1 class="display-4">London Crime Count by Wards</h1>
+                        <p class="lead">Crime count in the past 24 months. (Available data: 2020/03 - 2022/04)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+          <div class="container">
+              <div class="row">
+                  <div class="col-sm-3">
+                      <form>
+                        <div class="form-group">
+                          <div class="form-row">
+                              <div class = "col">
+                                <label for="boroughSelect">Select a borough</label>
+                                <select class="form-control" id="boroughSelect">
+                                    <option>All boroughs</option>
+                                    <% for(var i = 0; i<result[0].length; i++) {%>
+                                    <option <% if(borough == result[0][i]['boroughName']){ %>selected<%}%> ><%= result[0][i]['boroughName'] %></option>
+                                  <% } %>
+                                </select>
+                              </div>
+                              </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Select period (inclusive): </label>
+                                <div class="form-row">
+                                    <div class="col-6">
+                                        <input type="text" class="form-control" value="<%= startYearMonth %>" placeholder="From (YYYYMM)">
+                                    </div>
+                                    <div class="col">
+                                        <input type="text" class="form-control" value="<%= endYearMonth %>" placeholder="To (YYYYMM)">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Select Crime Type: </label>
+                                <% for(var i = 0; i<result[1].length; i++) {%>
+                                    <div class="form-row">
+                                        <div class="col">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" value="" id="crime-<%= i %>" checked>
+                                                <label class="form-check-label" for="crime-<%= i %>"><%= result[1][i]['majorCrimeName'] %></label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <% } %>
+                                </div>
+                            <div>
+                                <div class="form-row">
+                                    <div class="col">
+                                        <button type="submit" class="btn btn-primary mb-3">Refresh</button>
+                                      </div>
+                                </div>
+                            </div>
+                      </form>
+                  </div>
+                  <div class="col-sm-9">
+                    <div id="tooltip"></div>
+                    <svg id="map" width="800" height="600"></svg>
+                  </div>
+              </div>
+          </div> 
+        </body>
+        <script src="/js/jquery-3.6.0.min.js"></script>
+        <script src="/js/bootstrap.bundle.min.js"></script>
+        <script src="/js/d3.v6.js"></script>
+        <!-- Make sure you put this AFTER Leaflet's CSS -->
+        <script>
+          function drawChoropleth(startYearMonth, endYearMonth, boroughName = ''){
+            $.get(`/getLatLong/${boroughName}`, function( longLat ) {
+                
+                // The svg
+                const svg = d3.select("svg"),
+                width = +svg.attr("width"),
+                height = +svg.attr("height");
+
+                var tooltip = d3.select("#tooltip")
+                .style("opacity", 0)
+                .attr("class", "tooltip")
+                .style("background-color", "white")
+                .style("border", "solid")
+                .style("border-width", "1px")
+                .style("border-radius", "5px")
+                .style("padding", "5px")
+                .style("position", "absolute")
+        
+                // Map and projection
+                const path = d3.geoPath();
+                const projection = d3.geoMercator()
+                .scale(<%= scaleRatio %>)
+                .center(longLat)
+                .translate([width / 2, height / 2]);
+        
+                // Data and color scale
+                let data = new Map();
+        
+                // Load external data and boot
+                Promise.all([
+                d3.json(`/londonGEO/${boroughName}`),
+                d3.json(`/enquireCrime/${startYearMonth}/${endYearMonth}/${boroughName}`)
+                ]).then(function(loadData){
+                  let londonGEO = loadData[0];
+                  let crimeCountRows = loadData[1]['data'];
+                  for(var i = 0; i<crimeCountRows.length; i++){
+                    data.set(crimeCountRows[i].wardCode, crimeCountRows[i].crimeCount);
+                  }
+
+                  // Define mouse behaviours
+                  let mouseOver = function(d) {
+                    d3.select(this)
+                        .transition()
+                        .duration(0)
+                        .style("opacity", 1)
+                        .style("stroke", "black")
+                    
+                    let name = d.path[0].__data__.properties.WD21NM;
+                    let wardCrimeCount = data.get(d.path[0].__data__.properties.WD21CD);
+
+                    tooltip
+                        .style("opacity", 0.8)
+                        // .html(d.id + ": " + d3.format(",.2r")(d.total))
+                        .html(name + " - " + wardCrimeCount)
+                        .style("left", (d3.pointer(d)[0] - 10) + "px")		
+                        .style("top", (d3.pointer(d)[1] - 38) + "px");
+                    }
+
+                    let mouseLeave = function(d) {
+                        d3.select(this)
+                        .transition()
+                        .duration(0)
+                        .style("stroke", "transparent")
+                                            
+                        tooltip
+                            .style("opacity", 0)
+                    }
+
+                let sequentialScale = d3.scaleSequential()
+                    .domain([parseInt(loadData[1]['minmax']['min']), parseInt(loadData[1]['minmax']['max'])])
+                    .interpolator(d3.interpolateReds);
+
+                  // Draw map
+                  svg.append("g")
+                    .selectAll("path")
+                    .data(londonGEO.features)
+                    .join("path")
+                    // draw each wards
+                    .attr("d", d3.geoPath()
+                      .projection(projection)
+                    )
+                    // set the color of each country
+                    .attr("fill", function (d) {
+                          d.total = data.get(d.properties.WD21CD) || 0;
+                      return sequentialScale(d.total);
+                    })
+                    .on("mouseover", mouseOver )
+                    .on("mouseleave", mouseLeave )
+                })
+            }); 
+          }
+
+          drawChoropleth('<%= startYearMonth %>', '<%= endYearMonth %>', '<%= borough %>');
+        </script>
 </html>

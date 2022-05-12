@@ -3,7 +3,8 @@
 <script src="/js/d3.v6.js"></script>
 <!-- Make sure you put this AFTER Leaflet's CSS -->
 <script>
-// The svg
+  function drawChoropleth(startYearMonth, EndYearMonth, boroughName = ''){
+        // The svg
         const svg = d3.select("svg"),
         width = +svg.attr("width"),
         height = +svg.attr("height");
@@ -11,26 +12,27 @@
         // Map and projection
         const path = d3.geoPath();
         const projection = d3.geoMercator()
-        .scale(24000)
-        .center([-0.118092, 51.509865])
+        .scale(<%= scaleRatio %>)
+        .center(<%- JSON.stringify(centreLongLat) %>)
         .translate([width / 2, height / 2]);
 
         // Data and color scale
         let data = new Map()
-        const colorScale = d3.scaleThreshold()
-        .domain([1000, 3000, 5000, 7000, 9000, 11000])
-        .range(d3.schemeBlues[7]);
 
         // Load external data and boot
         Promise.all([
-        d3.json("/londonGEO"),
-        d3.json("/boroughCrime")
+        d3.json(`/londonGEO/${boroughName}`),
+        d3.json(`/enquireCrime/${startYearMonth}/${EndYearMonth}/${boroughName}`)
         ]).then(function(loadData){
           let topo = loadData[0];
-          let crimeCountRows = loadData[1];
+          let crimeCountRows = loadData[1]['data'];
           for(var i = 0; i<crimeCountRows.length; i++){
             data.set(crimeCountRows[i].wardCode, crimeCountRows[i].crimeCount);
           }
+          const colorScale = d3.scaleThreshold()
+          .domain(loadData[1]['scales'])
+          .range(d3.schemeBlues[loadData[1]['scales'].length + 1]);
+
           // Draw the map
           svg.append("g")
             .selectAll("path")
@@ -46,4 +48,7 @@
               return colorScale(d.total);
             })
         })
+  }
+  drawChoropleth('202004', '202203', '<%= borough %>');
+  
 </script>
