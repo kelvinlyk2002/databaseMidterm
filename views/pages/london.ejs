@@ -13,8 +13,8 @@
             <div class="row">
                 <div class="col">
                     <div class="jumbotron">
-                        <h1 class="display-4">London Crime Count by Wards</h1>
-                        <p class="lead">Crime count in the past 24 months. (Available data: 2020/03 - 2022/04)</p>
+                        <h5 class="display-6">London Crime Count by Wards in the past 24 months. (Available data: 2020/03 - 2022/04)</h5>
+                        <p class="lead">Average: <span id="average"></span></p>
                     </div>
                 </div>
             </div>
@@ -40,20 +40,24 @@
                                 <label>Select period (inclusive): </label>
                                 <div class="form-row">
                                     <div class="col-6">
-                                        <input type="text" class="form-control" value="<%= startYearMonth %>" placeholder="From (YYYYMM)">
+                                        <input type="text" id="startYearMonth" class="form-control" value="<%= startYearMonth %>" placeholder="From (YYYYMM)">
                                     </div>
                                     <div class="col">
-                                        <input type="text" class="form-control" value="<%= endYearMonth %>" placeholder="To (YYYYMM)">
+                                        <input type="text" id="endYearMonth" class="form-control" value="<%= endYearMonth %>" placeholder="To (YYYYMM)">
                                     </div>
                                 </div>
                             </div>
                             <div class="form-group">
                                 <label>Select Crime Type: </label>
+                                <p>
+                                    <a href="#" id="selectAllCrime">Select All</a>
+                                    <a href="#" class="mx-3" id="deselectAllCrime">Deselect All</a>
+                                </p>
                                 <% for(var i = 0; i<result[1].length; i++) {%>
                                     <div class="form-row">
                                         <div class="col">
                                             <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" value="" id="crime-<%= i %>" checked>
+                                                <input class="form-check-input crimeSelected" type="checkbox" value="" id="crime-<%= i %>" name="<%= result[1][i]['majorCrimeName'] %>" checked>
                                                 <label class="form-check-label" for="crime-<%= i %>"><%= result[1][i]['majorCrimeName'] %></label>
                                             </div>
                                         </div>
@@ -63,7 +67,7 @@
                             <div>
                                 <div class="form-row">
                                     <div class="col">
-                                        <button type="submit" class="btn btn-primary mb-3">Refresh</button>
+                                        <button id="buttonSubmit" onclick="event.preventDefault();" class="btn btn-primary mb-3">Refresh</button>
                                       </div>
                                 </div>
                             </div>
@@ -80,10 +84,9 @@
         <script src="/js/bootstrap.bundle.min.js"></script>
         <script src="/js/d3.v6.js"></script>
         <!-- Make sure you put this AFTER Leaflet's CSS -->
-        <script>
-          function drawChoropleth(startYearMonth, endYearMonth, boroughName = ''){
+        <script>            
+          function drawChoropleth(startYearMonth, endYearMonth, boroughName = '', crimeTypes = ''){
             $.get(`/getLatLong/${boroughName}`, function( longLat ) {
-                
                 // The svg
                 const svg = d3.select("svg"),
                 width = +svg.attr("width"),
@@ -101,18 +104,35 @@
         
                 // Map and projection
                 const path = d3.geoPath();
-                const projection = d3.geoMercator()
-                .scale(<%= scaleRatio %>)
-                .center(longLat)
-                .translate([width / 2, height / 2]);
-        
+                let projection = d3.geoMercator()
+                        .scale(55000)
+                        .center(longLat)
+                        .translate([width / 2, height / 2]);
+                if(boroughName != ''){
+                    projection = d3.geoMercator()
+                        .scale(120000)
+                        .center(longLat)
+                        .translate([width / 2, height / 2]);
+                }
+
                 // Data and color scale
                 let data = new Map();
-        
+
+                let enquireCrimeURL = `/enquireCrime/${startYearMonth}/${endYearMonth}/${boroughName}`;
+                if(crimeTypes != ''){
+                    enquireCrimeURL += '?'
+                    for(var i = 0; i < crimeTypes.length; i++){
+                        enquireCrimeURL += 'crimeTypes[]='
+                        enquireCrimeURL += crimeTypes[i];
+                        if(i != crimeTypes.length - 1){
+                            enquireCrimeURL += '&'
+                        }
+                    }
+                }
                 // Load external data and boot
                 Promise.all([
                 d3.json(`/londonGEO/${boroughName}`),
-                d3.json(`/enquireCrime/${startYearMonth}/${endYearMonth}/${boroughName}`)
+                d3.json(enquireCrimeURL)
                 ]).then(function(loadData){
                   let londonGEO = loadData[0];
                   let crimeCountRows = loadData[1]['data'];
@@ -129,7 +149,7 @@
                         .style("stroke", "black")
                     
                     let name = d.path[0].__data__.properties.WD21NM;
-                    let wardCrimeCount = data.get(d.path[0].__data__.properties.WD21CD);
+                    let wardCrimeCount = data.get(d.path[0].__data__.properties.WD21CD) || 0;
 
                     tooltip
                         .style("opacity", 0.8)
@@ -148,10 +168,16 @@
                         tooltip
                             .style("opacity", 0)
                     }
+                
+                if('<%= borough %>'.length > 0 ){
+                    interpolateColorScheme = d3.interpolateRgb.gamma(5)("green", "red");
+                } else {
+                    interpolateColorScheme = d3.interpolateRgb.gamma(5)("red", "green");
+                }
 
                 let sequentialScale = d3.scaleSequential()
                     .domain([parseInt(loadData[1]['minmax']['min']), parseInt(loadData[1]['minmax']['max'])])
-                    .interpolator(d3.interpolateReds);
+                    .interpolator(interpolateColorScheme);
 
                   // Draw map
                   svg.append("g")
@@ -169,10 +195,40 @@
                     })
                     .on("mouseover", mouseOver )
                     .on("mouseleave", mouseLeave )
+
+                    $("#average").html(loadData[1]['average']);
                 })
             }); 
           }
 
-          drawChoropleth('<%= startYearMonth %>', '<%= endYearMonth %>', '<%= borough %>');
+          
+          $(document).ready(function(){
+            $("#buttonSubmit").click(function(){
+                const svg = d3.select("svg");
+                svg.selectAll('*').remove();
+                let boroughSelected = '';
+                if($('#boroughSelect').val() != 'All boroughs'){
+                    boroughSelected = $('#boroughSelect').val();
+                }
+                let crimeSelected = [];
+                for(var i = 0; i < $('.crimeSelected').length; i++){
+                    if($($('.crimeSelected')[i]).prop('checked')){
+                        crimeSelected.push($($('.crimeSelected')[i]).attr('name'));
+                    }
+                }
+                drawChoropleth($('#startYearMonth').val(), $('#endYearMonth').val(), boroughSelected, crimeSelected);
+            });
+
+            $("#selectAllCrime").click(function(){
+                $('.crimeSelected').prop('checked', true);
+            });
+
+            $("#deselectAllCrime").click(function(){
+                $('.crimeSelected').prop('checked', false);
+            });
+          })
+
+          // init map
+          drawChoropleth('<%= startYearMonth %>', '<%= endYearMonth %>', '<%= borough %>', '');
         </script>
 </html>

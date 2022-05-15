@@ -1,6 +1,6 @@
 module.exports = function (app) {
     app.get("/", function (req, res) {
-        res.render("pages/index")
+        res.redirect(302, "/london")
     });
 
     app.get("/london", function (req, res) {
@@ -26,11 +26,6 @@ module.exports = function (app) {
                     res.sendStatus(500);
                 }
                 result.push(rows);
-                if(req.query.borough == undefined){
-                    scaleRatio = 55000;
-                } else {
-                    scaleRatio = 120000;
-                }
                 if(req.query.startYearMonth == undefined || req.query.endYearMonth == undefined){
                     startYearMonth = "202004";
                     endYearMonth = "202203";
@@ -38,7 +33,12 @@ module.exports = function (app) {
                     startYearMonth = req.query.startYearMonth;
                     endYearMonth = req.query.endYearMonth;
                 }
-                res.render("pages/about", {result: result, borough: req.query.borough, startYearMonth: startYearMonth, endYearMonth:endYearMonth, scaleRatio: scaleRatio});
+                res.render("pages/london", {
+                    result: result, 
+                    borough: req.query.borough, 
+                    startYearMonth: startYearMonth, 
+                    endYearMonth:endYearMonth 
+                });
             });
         });
     })
@@ -115,6 +115,21 @@ module.exports = function (app) {
         } else {
             boroughSelectionClause = '';
         }
+        let formattedStartYearMonth = req.params.startYearMonth.slice(0, 4) + "-" + req.params.startYearMonth.slice(4, 6) + "-01";
+        let formattedEndYearMonth = req.params.endYearMonth.slice(0, 4) + "-" + req.params.endYearMonth.slice(4, 6) + "-01";
+        let crimeSelectionClause = '';
+        if(req.query.crimeTypes != undefined){
+            crimeSelectionClause += "WHERE majorCrimeCategory.name IN ("
+            for(var i = 0; i < req.query.crimeTypes.length; i++){
+                crimeSelectionClause += "'"
+                crimeSelectionClause += req.query.crimeTypes[i]
+                crimeSelectionClause += "'"
+                if(i != req.query.crimeTypes.length -1 ){
+                    crimeSelectionClause += ","
+                }
+            }
+            crimeSelectionClause += ")"
+        }
         let boroughOverallSqlquery = `
 WITH wardCrime AS (
     WITH crimeCategory AS (
@@ -124,6 +139,7 @@ WITH wardCrime AS (
             majorCrimeCategory.name AS majorCrimeName
         FROM minorCrimeCategory
         INNER JOIN majorCrimeCategory ON minorCrimeCategory.majorCrimeID = majorCrimeCategory.id
+        ${crimeSelectionClause}
     ), boroughWard AS (
         SELECT
             ward.id AS wardID,
@@ -137,12 +153,11 @@ WITH wardCrime AS (
     SELECT
         boroughWard.wardCode as wardCode,
         SUM(crime.crimeCount) as crimeCount,
-        CONCAT(crime.year, crime.month) as yearmonth
+        crime.yearmonth as yearmonth
     FROM crime
     INNER JOIN crimeCategory ON crime.minorCrimeID = crimeCategory.minorCrimeID
     INNER JOIN boroughWard ON crime.wardID = boroughWard.wardID
-    WHERE CONCAT(crime.year, crime.month) >= "${req.params.startYearMonth}"
-    AND CONCAT(crime.year, crime.month) <= "${req.params.endYearMonth}"
+    WHERE crime.yearmonth BETWEEN "${formattedStartYearMonth}" AND "${formattedEndYearMonth}"
     GROUP BY boroughWard.wardCode, yearmonth
 )
 SELECT
@@ -155,13 +170,26 @@ GROUP BY wardCrime.wardCode;
             if (err) {
                 res.sendStatus(500);
             }
-            rows.sort((a, b) => a.crimeCount - b.crimeCount);
-            result = {"minmax": {"min": rows[0].crimeCount, "max": rows[rows.length-1].crimeCount}, "data": rows}
+            if(rows.length == 0){
+                // no crime
+                result = {
+                    "minmax": {"min": 0, "max": 0},
+                    "average":0,
+                    "data": rows
+                };
+            } else {
+                rows.sort((a, b) => a.crimeCount || 0 - b.crimeCount || 0);
+                let runningSum = 0;
+                for(var i = 0; i < rows.length; i++){
+                    runningSum += parseInt(rows[i].crimeCount);
+                }
+                result = {
+                    "minmax": {"min": rows[0].crimeCount, "max": rows[rows.length-1].crimeCount},
+                    "average": Math.floor(runningSum / rows.length),
+                    "data": rows
+                }
+            }
             res.json(result);
         });
-    });
-
-    app.get("/about", function (req, res) {
-        res.render("pages/about", {result: []})
     });
 }
