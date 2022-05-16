@@ -1,12 +1,12 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const app = express();
-const mysql = require("mysql2");
+const mysql = require("mysql");
 const port = 8089;
 const db = mysql.createConnection({
     host: "127.0.0.1",
     user: "root",
-    password: "password",
+    password: "",
     database: "midterm"
 });
 db.connect((err) => {
@@ -23,4 +23,4 @@ require("./routes/main")(app);
 app.set("views", __dirname + "/views");
 app.set("view engine", "ejs");
 app.engine("html", require("ejs").renderFile);
-app.listen(port, () => console.log(`mySmartHome app listening on port ${port}!`));
+app.listen(port, () => console.log(`LondonCrime app listening on port ${port}!`));
